@@ -1,5 +1,6 @@
 package com.ezlevup.jober.service;
 
+import com.ezlevup.jober.dto.LoginRequest;
 import com.ezlevup.jober.dto.SignupRequest;
 import com.ezlevup.jober.entity.User;
 import com.ezlevup.jober.repository.UserRepository;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -54,6 +56,20 @@ public class UserService {
         user.setNickname(request.getNickname());
         
         return userRepository.save(user);
+    }
+    
+    public User loginUser(LoginRequest request) {
+        Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
+        if (userOpt.isEmpty()) {
+            return null;
+        }
+        
+        User user = userOpt.get();
+        if (passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            return user;
+        }
+        
+        return null;
     }
     
     private boolean isValidEmail(String email) {
