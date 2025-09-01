@@ -30,7 +30,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/signup", "/api/login", "/api/logout", "/api/hello", "/h2-console/**").permitAll()
+                .requestMatchers("/api/signup", "/api/login", "/api/logout", "/api/hello", "/h2-console/**", 
+                    "/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated()
             )
             .headers(headers -> headers.frameOptions().disable())
