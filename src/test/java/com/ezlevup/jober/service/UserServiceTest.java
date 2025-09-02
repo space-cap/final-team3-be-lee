@@ -8,14 +8,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.annotation.Transactional;
+import org.junit.jupiter.api.AfterEach;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
-@Transactional
+@org.springframework.test.context.TestPropertySource(locations = "classpath:application-test.properties")
 class UserServiceTest {
 
     @Autowired
@@ -26,6 +26,11 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
+        userRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
         userRepository.deleteAll();
     }
 
@@ -75,13 +80,13 @@ class UserServiceTest {
     void validateSignupRequest_duplicateEmail_fail() {
         // 기존 사용자 생성
         User existingUser = new User();
-        existingUser.setEmail("test@example.com");
+        existingUser.setEmail("duplicate@example.com");
         existingUser.setPassword("encodedPassword");
         existingUser.setNickname("기존사용자");
         userRepository.save(existingUser);
 
         SignupRequest request = new SignupRequest();
-        request.setEmail("test@example.com");
+        request.setEmail("duplicate@example.com");
         request.setPassword("password123");
         request.setNickname("새사용자");
 
@@ -95,7 +100,7 @@ class UserServiceTest {
     @DisplayName("짧은 비밀번호 검증 - 실패")
     void validateSignupRequest_shortPassword_fail() {
         SignupRequest request = new SignupRequest();
-        request.setEmail("test@example.com");
+        request.setEmail("shortpw@example.com");
         request.setPassword("123");
         request.setNickname("테스터");
 
@@ -109,7 +114,7 @@ class UserServiceTest {
     @DisplayName("빈 닉네임 검증 - 실패")
     void validateSignupRequest_emptyNickname_fail() {
         SignupRequest request = new SignupRequest();
-        request.setEmail("test@example.com");
+        request.setEmail("emptynick@example.com");
         request.setPassword("password123");
         request.setNickname("");
 
@@ -130,7 +135,7 @@ class UserServiceTest {
         userRepository.save(existingUser);
 
         SignupRequest request = new SignupRequest();
-        request.setEmail("test@example.com");
+        request.setEmail("newnick@example.com");
         request.setPassword("password123");
         request.setNickname("테스터");
 
@@ -144,15 +149,15 @@ class UserServiceTest {
     @DisplayName("사용자 생성 - 성공")
     void createUser_success() {
         SignupRequest request = new SignupRequest();
-        request.setEmail("test@example.com");
+        request.setEmail("create@example.com");
         request.setPassword("password123");
-        request.setNickname("테스터");
+        request.setNickname("생성테스터");
 
         User createdUser = userService.createUser(request);
 
         assertThat(createdUser.getId()).isNotNull();
-        assertThat(createdUser.getEmail()).isEqualTo("test@example.com");
-        assertThat(createdUser.getNickname()).isEqualTo("테스터");
+        assertThat(createdUser.getEmail()).isEqualTo("create@example.com");
+        assertThat(createdUser.getNickname()).isEqualTo("생성테스터");
         assertThat(createdUser.getPassword()).isNotEqualTo("password123"); // 암호화됨
         assertThat(createdUser.getCreatedAt()).isNotNull();
         assertThat(createdUser.getUpdatedAt()).isNotNull();
@@ -162,9 +167,9 @@ class UserServiceTest {
     @DisplayName("비밀번호 암호화 확인")
     void createUser_passwordEncryption() {
         SignupRequest request = new SignupRequest();
-        request.setEmail("test@example.com");
+        request.setEmail("encrypt@example.com");
         request.setPassword("password123");
-        request.setNickname("테스터");
+        request.setNickname("암호화테스터");
 
         User createdUser = userService.createUser(request);
 
