@@ -15,14 +15,14 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
+import org.junit.jupiter.api.AfterEach;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Transactional
+@org.springframework.test.context.TestPropertySource(locations = "classpath:application-test.properties")
 class AuthControllerTest {
 
     @LocalServerPort
@@ -42,6 +42,11 @@ class AuthControllerTest {
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port + "/api";
+        userRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
         userRepository.deleteAll();
     }
 
@@ -65,9 +70,14 @@ class AuthControllerTest {
         assertThat((String) response.getBody().get("message")).isEqualTo("회원가입이 완료되었습니다.");
         
         Map<String, Object> data = (Map<String, Object>) response.getBody().get("data");
-        assertThat((String) data.get("email")).isEqualTo("success@example.com");
-        assertThat((String) data.get("nickname")).isEqualTo("성공테스터");
-        assertThat(data.get("password")).isNull();
+        assertThat(data).isNotNull();
+        
+        // AuthResponse 구조에 따라 user 객체에서 정보 추출
+        Map<String, Object> userInfo = (Map<String, Object>) data.get("user");
+        assertThat(userInfo).isNotNull();
+        assertThat((String) userInfo.get("email")).isEqualTo("success@example.com");
+        assertThat((String) userInfo.get("nickname")).isEqualTo("성공테스터");
+        assertThat(userInfo.get("password")).isNull();
     }
 
     @Test
