@@ -86,7 +86,7 @@ jobs:
           sleep 20
           
           # 헬스체크
-          if curl -f http://localhost:8080/actuator/health; then
+          if curl -f http://localhost:8080/api/hello; then
             echo "Deployment successful!"
           else
             echo "Deployment failed!"
