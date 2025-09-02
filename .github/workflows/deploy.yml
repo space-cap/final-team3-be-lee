@@ -1,71 +1,92 @@
-name: Deploy Spring Boot Application
+name: Spring Boot CI/CD to EC2
 
-# 트리거 설정 - 언제 워크플로우가 실행될지 정의
 on:
   push:
-    branches: [ main, master ]  # main 또는 master 브랜치에 푸시될 때
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]          # main으로 PR이 생성될 때
+    branches: [ main ]
+
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRIBUTION: 'corretto'
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest      # GitHub에서 제공하는 우분투 가상머신 사용
-
+  # 1단계: 코드 빌드 및 테스트
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    
     steps:
-    # 1단계: 코드 체크아웃
-    - name: 코드 체크아웃
+    - name: Checkout code
       uses: actions/checkout@v4
-
-    # 2단계: JDK 21 환경 설정
-    - name: JDK 21 설정
+      
+    - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
-        java-version: '21'
-        distribution: 'temurin'  # Eclipse Adoptium의 OpenJDK
-        cache: maven             # Maven 의존성 캐싱으로 빌드 속도 향상
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: ${{ env.JAVA_DISTRIBUTION }}
+        
+    - name: Cache Maven dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Run tests
+      run: ./mvnw test
+      
+    - name: Build JAR file
+      run: ./mvnw clean package -DskipTests
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: jar-artifact
+        path: target/*.jar
+        retention-days: 1
+
+  # 2단계: EC2에 배포 (main 브랜치만)
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
-    # 3단계: Maven 권한 설정 (필요시)
-    - name: Maven Wrapper 실행 권한 부여
-      run: chmod +x mvnw
-
-    # 4단계: 애플리케이션 빌드 및 테스트
-    - name: Maven 빌드 및 테스트
-      run: |
-        ./mvnw clean compile test package -DskipTests=false
-
-    # 5단계: 테스트 결과 업로드 (선택사항)
-    - name: 테스트 결과 발행
-      uses: dorny/test-reporter@v1
-      if: success() || failure()
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
       with:
-        name: Maven Tests
-        path: target/surefire-reports/*.xml
-        reporter: java-junit
-
-    # 6단계: Docker 이미지 빌드
-    - name: Docker 이미지 빌드
+        name: jar-artifact
+        
+    - name: Setup SSH
       run: |
-        docker build -t myapp:latest .
-        docker tag myapp:latest ${{ secrets.DOCKER_REGISTRY }}/myapp:latest
-
-    # 7단계: Docker Hub에 푸시
-    - name: Docker Hub 로그인 및 푸시
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+        
+    - name: Deploy to EC2
       run: |
-        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-        docker push ${{ secrets.DOCKER_REGISTRY }}/myapp:latest
-
-    # 8단계: 서버 배포
-    - name: 서버에 배포
-      uses: appleboy/ssh-action@v0.1.8
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        script: |
-          docker pull ${{ secrets.DOCKER_REGISTRY }}/myapp:latest
-          docker stop old-container || true
-          docker rm old-container || true
-          docker run -d --name new-container -p 8080:8080 ${{ secrets.DOCKER_REGISTRY }}/myapp:latest
-
+        # JAR 파일을 EC2로 복사
+        scp -i ~/.ssh/id_rsa *.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/
+        
+        # EC2에서 배포 스크립트 실행
+        ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # 기존 프로세스 종료
+          sudo pkill -f 'java -jar' || true
           
-
+          # 새 애플리케이션 시작
+          nohup java -jar ~/your-app-*.jar --spring.profiles.active=prod > ~/app.log 2>&1 &
+          
+          # 애플리케이션 시작 대기
+          sleep 10
+          
+          # 헬스체크
+          if curl -f http://localhost:8080/actuator/health; then
+            echo "Deployment successful!"
+          else
+            echo "Deployment failed!"
+            exit 1
+          fi
+        EOF
