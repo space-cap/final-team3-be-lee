@@ -15,4 +15,10 @@ public class TemplateGenerateRequest {
     
     @Schema(description = "템플릿 목적", example = "과제 안내")
     private String purpose;
+    
+    @Schema(description = "비즈니스 타입", example = "교육")
+    private String businessType;
+    
+    @Schema(description = "메시지 목적", example = "공지사항")
+    private String messagePurpose;
 }
